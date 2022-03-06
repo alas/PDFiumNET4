@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package >
+  <metadata>
+    <id>PDFiumNET4</id>
+    <version>1.0.2</version>
+    <title>PDFiumNET4</title>
+    <authors>alas</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <projectUrl>https://github.com/alas/PDFiumNET4/</projectUrl>
+    <description>Wrapper for the C++ library PDFium for .NET 4.0</description>
+    <summary>Wrapper for the C++ library PDFium for .NET 4.0</summary>
+    <copyright>Copyright 2022</copyright>
+    <tags>PDF PNG Image PDFium NET4 NET40 NET4.0</tags>
+    <dependencies>
+      <group targetFramework=".NETFramework4.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="build\x86\pdfium.dll" target="build\x86" />
+    <file src="build\x64\pdfium.dll" target="build\x64" />
+    <file src="build\PDFiumNET4.targets" target="build" />
+  </files>
+</package>
