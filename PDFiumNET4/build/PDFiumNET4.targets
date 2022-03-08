@@ -9,5 +9,13 @@
 			<Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Include="$(MSBuildThisFileDirectory)\x86\zopfli.dll">
+			<Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <None Include="$(MSBuildThisFileDirectory)\x64\zopfli.dll">
+			<Link>%(RecursiveDir)%(FileName)%(Extension)</Link>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 </Project>

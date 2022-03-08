@@ -4,13 +4,14 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using LibZopfliSharp;
 using PDFiumCore;
 
 namespace PDFiumNET4
 {
     public class SimplePdf
     {
-        #region Load Native DLL
+        #region Load Native DLLs
 
         //copied from: https://github.com/marcpabst/PdfiumLight/blob/master/NativeMethods.cs
 
@@ -31,9 +32,14 @@ namespace PDFiumNET4
             if (path is null)
                 return false;
 
-            path = Path.Combine(path, "build", IntPtr.Size == 4 ? "x86" : "x64", "pdfium.dll");
+            var newPath = Path.Combine(path, "build", IntPtr.Size == 4 ? "x86" : "x64", "pdfium.dll");
 
-            return File.Exists(path) && LoadLibrary(path) != IntPtr.Zero;
+            var result = File.Exists(newPath) && LoadLibrary(newPath) != IntPtr.Zero;
+            if (!result) return false;
+
+            var newPath2 = Path.Combine(path, "build", IntPtr.Size == 4 ? "x86" : "x64", "zopfli.dll");
+
+            return File.Exists(newPath2) && LoadLibrary(newPath2) != IntPtr.Zero;
         }
 
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Auto)]
@@ -41,7 +47,7 @@ namespace PDFiumNET4
 
         #endregion
 
-        public static void ToPngFiles(string fileName, string outputPath = null, int? imageWidth = null, int? imageHeight = null)
+        public static void ToPngFiles(string fileName, string outputPath = null, ImageOptions options = null)
         {
             // Load the document.
             var document = fpdfview.FPDF_LoadDocument(fileName, null);
@@ -51,30 +57,20 @@ namespace PDFiumNET4
                 ? Path.ChangeExtension(fileName, ".png")
                 : Path.Combine(outputPath, Path.ChangeExtension(Path.GetFileName(fileName), ".png"));
 
-            for (var i = 0; i < pageCount; i++)
+            var list = GetPngBytesInternal(document, options);
+
+            for (int i = 0; i < list.Count; i++)
             {
-                var tup = RenderPageToImage(document, i, imageWidth, imageHeight);
-                var byteArr = tup.Item1;
-                var pageWidth = tup.Item2;
-                var pageHeight = tup.Item3;
+                var file = list[i];
+
                 var currentFileName = newFileName;
                 if (pageCount > 1) currentFileName = currentFileName.Replace(".png", "_" + i + ".png");
 
-                using (var bmp = new Bitmap((int)pageWidth, (int)pageHeight, PixelFormat.Format32bppArgb))
-                {
-                    AddBytes(bmp, byteArr);
-
-                    using (var stream = new MemoryStream())
-                    {
-                        bmp.Save(stream, ImageFormat.Png);
-
-                        File.WriteAllBytes(currentFileName, stream.ToArray());
-                    }
-                }
+                File.WriteAllBytes(currentFileName, file);
             }
         }
 
-        public unsafe static List<byte[]> GetPngBytes(byte[] fileContents, int? imageWidth = null, int? imageHeight = null)
+        public unsafe static List<byte[]> GetPngBytes(byte[] fileContents, ImageOptions options = null)
         {
             using (AutoPinner ap = new AutoPinner(fileContents))
             {
@@ -82,33 +78,58 @@ namespace PDFiumNET4
 
                 // Load the document.
                 var document = fpdfview.FPDF_LoadMemDocument(unamanagedFileContents, fileContents.Length, null);
-                var pageCount = fpdfview.FPDF_GetPageCount(document);
-                var res = new List<byte[]>(pageCount);
-
-                for (var i = 0; i < pageCount; i++)
-                {
-                    var tup = RenderPageToImage(document, i, imageWidth, imageHeight);
-                    var byteArr = tup.Item1;
-                    var pageWidth = tup.Item2;
-                    var pageHeight = tup.Item3;
-                    using (var bmp = new Bitmap((int)pageWidth, (int)pageHeight, PixelFormat.Format32bppArgb))
-                    {
-                        AddBytes(bmp, byteArr);
-
-                        using (var stream = new MemoryStream())
-                        {
-                            bmp.Save(stream, ImageFormat.Png);
-
-                            res.Add(stream.ToArray());
-                        }
-                    }
-                }
-
-                return res;
+                return GetPngBytesInternal(document, options);
             }
         }
 
-        private static Tuple<byte[], double, double> RenderPageToImage(FpdfDocumentT document, int pageIndex, int? imageWidthArg = null, int? imageHeightArg = null)
+        private static List<byte[]> GetPngBytesInternal(FpdfDocumentT document, ImageOptions options = null)
+        {
+            var pageCount = fpdfview.FPDF_GetPageCount(document);
+            var res = new List<byte[]>(pageCount);
+
+            for (var i = 0; i < pageCount; i++)
+            {
+                var tup = RenderPageToImage(document, i, options);
+                var byteArr = tup.Item1;
+                var pageWidth = tup.Item2;
+                var pageHeight = tup.Item3;
+                using (var img32 = new Bitmap((int)pageWidth, (int)pageHeight, PixelFormat.Format32bppArgb))
+                {
+                    AddBytes(img32, byteArr);
+
+                    var img = (options != null && options.PixelFormat != PixelFormat.Format32bppArgb)
+                        ? ConvertToFormat(img32, options.PixelFormat)
+                        : img32;
+                    using (var stream = new MemoryStream())
+                    {
+                        img.Save(stream, ImageFormat.Png);
+
+                        var png24 = stream.ToArray();
+
+                        if (options == null || !options.Compressed)
+                        {
+                            res.Add(png24);
+                        }
+                        else
+                        {
+                            using (var compressStream = new MemoryStream())
+                            using (var compressor = new ZopfliPNGStream(compressStream))
+                            {
+                                compressor.Write(png24, 0, png24.Length);
+                                compressor.Close();
+                                var compressed = compressStream.ToArray();
+                                res.Add(compressed);
+                            }
+                        }
+                    }
+                    if (img != img32) img.Dispose();
+                }
+            }
+
+            return res;
+        }
+
+        private static Tuple<byte[], double, double> RenderPageToImage(FpdfDocumentT document, int pageIndex, ImageOptions options = null)
         {
             int imageWidth;
             int imageHeight;
@@ -122,12 +143,12 @@ namespace PDFiumNET4
 
                 float scaleX;
                 float scaleY;
-                if (imageWidthArg.HasValue && imageHeightArg.HasValue)
+                if (options != null && options.ImageWidth.HasValue && options.ImageHeight.HasValue)
                 {
-                    scaleX = (float)(imageWidthArg.Value * 1.0 / pageWidth);
-                    scaleY = (float)(imageHeightArg.Value * 1.0 / pageHeight);
-                    imageWidth = imageWidthArg.Value;
-                    imageHeight = imageHeightArg.Value;
+                    scaleX = (float)(options.ImageWidth.Value * 1.0 / pageWidth);
+                    scaleY = (float)(options.ImageHeight.Value * 1.0 / pageHeight);
+                    imageWidth = options.ImageWidth.Value;
+                    imageHeight = options.ImageHeight.Value;
                 }
                 else
                 {
@@ -203,6 +224,14 @@ namespace PDFiumNET4
             bmp.UnlockBits(bmpData);
         }
 
+        public static Bitmap ConvertToFormat(Image img, PixelFormat format)
+        {
+            var bmp = new Bitmap(img.Width, img.Height, format);
+            using (var gr = Graphics.FromImage(bmp))
+                gr.DrawImage(img, new Rectangle(0, 0, img.Width, img.Height));
+            return bmp;
+        }
+
         #region AutoPinner
 
         //https://stackoverflow.com/a/23838643/3323941
@@ -224,5 +253,19 @@ namespace PDFiumNET4
         } 
 
         #endregion
+
+        public class ImageOptions
+        {
+            public int? ImageWidth { get; set; } = null;
+            public int? ImageHeight { get; set; } = null;
+            public PixelFormat PixelFormat { get; set; } = PixelFormat.Format32bppArgb;
+            public bool Compressed { get; set; } = false;
+        }
+
+        public enum ImageType
+        {
+            Unknown = 0,
+            Png = 1,
+        }
     }
 }

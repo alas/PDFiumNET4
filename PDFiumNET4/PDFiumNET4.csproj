@@ -49,9 +49,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CppSharp.cs" />
-    <Compile Include="PDFiumCore.cs" />
-    <Compile Include="PDFiumCoreFlags.cs" />
+    <Compile Include="CppSharp\CppSharp.cs" />
+    <Compile Include="libzopfli_sharp\NativeUtilities.cs" />
+    <Compile Include="libzopfli_sharp\Zopfli.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliCompressor.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliOptions.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliPNG.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliPNGException.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliPNGOptions.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliPNGStream.cs" />
+    <Compile Include="libzopfli_sharp\ZopfliStream.cs" />
+    <Compile Include="PDFiumCore\PDFiumCore.cs" />
+    <Compile Include="PDFiumCore\PDFiumCoreFlags.cs" />
     <Compile Include="SimplePdf.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -69,6 +78,15 @@
   <ItemGroup>
     <None Include="PDFiumNET4.nuspec" />
     <None Include="PDFiumNET4.pfx" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <None Include="build\x64\zopfli.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="build\x86\zopfli.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
